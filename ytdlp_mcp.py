@@ -174,7 +174,7 @@ class YtDlpService:
                     }
 
         except Exception as e:
-            return {"success": False, "error": f"Failed to extract subtitles: {str(e)}"}
+            raise
 
     def _process_vtt_content(
         self,
@@ -276,47 +276,47 @@ class YtDlpService:
         processed_lines = []
         seen_sentences = set()  # Track unique sentences
         current_sentence = ""
-        
+
         # Skip header lines
         start_processing = False
-        
+
         for line in lines:
             # Skip empty lines
             if not line.strip():
                 continue
-                
+
             # Skip VTT header
             if not start_processing:
                 if line.strip() and not line.startswith("WEBVTT"):
                     start_processing = True
                 else:
                     continue
-                    
+
             # Skip timing lines (they contain --> )
             if "-->" in line:
                 continue
-                
+
             # Skip lines with just numbers (timestamp indices)
             if line.strip().isdigit():
                 continue
-                
+
             # Clean the line and add non-empty content
             cleaned_line = self._clean_subtitle_text(line.strip())
             if not cleaned_line:
                 continue
-                
+
             # Check if this line is a duplicate of the previous content
             # This handles the case where VTT repeats the same text in consecutive segments
             if processed_lines and cleaned_line in processed_lines[-1]:
                 continue
-                
+
             # If we have a complete sentence, add it
-            if cleaned_line.endswith(('.', '!', '?')):
+            if cleaned_line.endswith((".", "!", "?")):
                 if current_sentence:
                     full_sentence = f"{current_sentence} {cleaned_line}".strip()
                 else:
                     full_sentence = cleaned_line
-                    
+
                 # Only add if not a duplicate
                 if full_sentence not in seen_sentences:
                     seen_sentences.add(full_sentence)
@@ -328,12 +328,12 @@ class YtDlpService:
                     current_sentence += f" {cleaned_line}"
                 else:
                     current_sentence = cleaned_line
-        
+
         # Add any remaining text
         if current_sentence and current_sentence not in seen_sentences:
             seen_sentences.add(current_sentence)
             processed_lines.append(current_sentence)
-            
+
         # Final deduplication pass - remove lines that are substrings of other lines
         final_lines = []
         for i, line in enumerate(processed_lines):
@@ -344,7 +344,7 @@ class YtDlpService:
                     break
             if not is_substring:
                 final_lines.append(line)
-                
+
         return "\n".join(final_lines)
 
     def _extract_subtitles_for_timerange(
@@ -352,28 +352,28 @@ class YtDlpService:
     ) -> str:
         """
         Extract subtitles that fall within a specific time range.
-        
+
         Args:
             lines: VTT subtitle lines
             start_seconds: Start time in seconds
             end_seconds: End time in seconds
-            
+
         Returns:
             Processed subtitle text for the time range
         """
         # Ensure start_seconds and end_seconds are float values
         start_seconds = float(start_seconds)
         end_seconds = float(end_seconds)
-        
+
         # First, collect all subtitle segments in the time range
         subtitle_segments = []
         current_time = 0
         current_segment = {"time": 0, "text": ""}
-        
+
         i = 0
         while i < len(lines):
             line = lines[i]
-            
+
             # Parse timestamp lines
             if "-->" in line:
                 time_parts = line.split("-->")
@@ -388,58 +388,68 @@ class YtDlpService:
                         else:
                             m, s = time_str.split(":")
                             current_time = int(m) * 60 + float(s)
-                            
+
                         # Check if this subtitle falls within our chapter range
                         if start_seconds <= current_time < end_seconds:
                             # Start a new segment
                             current_segment = {"time": current_time, "text": ""}
-                            
+
                             # Collect all text lines until next timestamp or empty line
                             j = i + 1
-                            while j < len(lines) and not ("-->" in lines[j]) and lines[j].strip():
+                            while (
+                                j < len(lines)
+                                and not ("-->" in lines[j])
+                                and lines[j].strip()
+                            ):
                                 if not lines[j].strip().isdigit():  # Skip index numbers
-                                    cleaned_line = self._clean_subtitle_text(lines[j].strip())
+                                    cleaned_line = self._clean_subtitle_text(
+                                        lines[j].strip()
+                                    )
                                     if cleaned_line:
-                                        current_segment["text"] += " " + cleaned_line if current_segment["text"] else cleaned_line
+                                        current_segment["text"] += (
+                                            " " + cleaned_line
+                                            if current_segment["text"]
+                                            else cleaned_line
+                                        )
                                 j += 1
-                            
+
                             # Only add non-empty segments
                             if current_segment["text"]:
                                 subtitle_segments.append(current_segment)
                     except (ValueError, IndexError):
                         pass
             i += 1
-        
+
         # Now process the segments to remove duplicates
         processed_lines = []
         seen_texts = set()
-        
+
         # Sort segments by time
         subtitle_segments.sort(key=lambda x: x["time"])
-        
+
         # Process segments
         for segment in subtitle_segments:
             text = segment["text"].strip()
-            
+
             # Skip if we've seen this exact text before
             if text in seen_texts:
                 continue
-                
+
             # Skip if this text is a substring of the last added line
             if processed_lines and text in processed_lines[-1]:
                 continue
-                
+
             # Skip if the last added line is a substring of this text
             if processed_lines and processed_lines[-1] in text:
                 # Replace the last line with this more complete one
                 processed_lines[-1] = text
                 seen_texts.add(text)
                 continue
-                
+
             # Add new unique text
             processed_lines.append(text)
             seen_texts.add(text)
-        
+
         return "\n".join(processed_lines)
 
     def _clean_subtitle_text(self, text: str) -> str:
@@ -565,15 +575,17 @@ async def serve() -> None:
         try:
             if name == YtDlpTools.YOUTUBE_CHAPTERS:
                 result = service.extract_chapters(arguments["url"])
-                return [TextContent(type="text", text=json.dumps(result))]
+                return [TextContent(type="text", text=result["content"])]
 
             elif name == YtDlpTools.YOUTUBE_SUBTITLES:
+                if "chapters" not in arguments or len(arguments["chapters"]) == 0:
+                    raise Exception("Chapter is required")
                 result = service.extract_subtitles(
                     arguments["url"],
                     arguments.get("language", "en"),
-                    arguments.get("chapters", []),
+                    arguments["chapters"],
                 )
-                return [TextContent(type="text", text=json.dumps(result))]
+                return [TextContent(type="text", text=result["content"])]
             else:
                 raise ValueError(f"Unknown tool: {name}")
 
