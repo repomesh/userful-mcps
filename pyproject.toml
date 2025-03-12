@@ -15,6 +15,7 @@ dependencies = [
     "mcp",
     "docx2pdf",
     "docx>=0.2.4",
+    "yt-dlp>=2025.2.19",
 ]
 
 [project.optional-dependencies]
