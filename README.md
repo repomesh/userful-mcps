@@ -17,6 +17,20 @@ A server that extracts information from YouTube videos using yt-dlp.
 - **Extract Chapters**: Get chapter information from a YouTube video
 - **Extract Subtitles**: Get subtitles from a YouTube video for specific chapters
 
+**MCP Server Configuration:**
+
+```json
+"mcpServers": {
+  "ytdlp": {
+    "command": "uv",
+    "args": [
+      "run",
+      "ytdlp_mcp"
+    ]
+  }
+}
+```
+
 ### Word Document Processor (`docx_replace_mcp.py`)
 
 A server for manipulating Word documents, including template processing and PDF conversion.
@@ -26,6 +40,42 @@ A server for manipulating Word documents, including template processing and PDF 
 - **Process Template**: Replace placeholders in Word templates and manage content blocks
 - **Get Template Keys**: Extract all replacement keys from a Word document template
 - **Convert to PDF**: Convert a Word document (docx) to PDF format
+
+**MCP Server Configuration:**
+
+```json
+"mcpServers": {
+  "docx_replace": {
+    "command": "uv",
+    "args": [
+      "run",
+      "docx_replace_mcp"
+    ]
+  }
+}
+```
+
+### PlantUML Renderer (`plantuml_server.py`)
+
+A server for rendering PlantUML diagrams.
+
+**Tools:**
+
+- **Render Diagram**: Convert PlantUML text to diagram images
+
+**MCP Server Configuration:**
+
+```json
+"mcpServers": {
+  "plantuml": {
+    "command": "uv",
+    "args": [
+      "run",
+      "plantuml_server"
+    ]
+  }
+}
+```
 
 ## Installation
 
