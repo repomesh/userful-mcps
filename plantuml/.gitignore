@@ -1,0 +1,6 @@
+.aider*
+__pycache__/
+*.png
+*.pyc
+/dist/
+/build/

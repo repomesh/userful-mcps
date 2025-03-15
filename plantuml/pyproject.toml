@@ -1,0 +1,18 @@
+[project]
+name = "plantuml-docker-renderer"
+version = "0.1.0"
+description = "MCP server for render plantuml diagram"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = ["plantuml", "click", "six>=1.17.0", "mcp>=1.4.1"]
+
+
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+dev-dependencies = ["pyright>=1.1.389"]
+
+[project.scripts]
+plantuml = "plantuml_server:main"

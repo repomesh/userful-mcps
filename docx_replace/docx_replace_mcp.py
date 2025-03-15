@@ -1,16 +1,3 @@
-"""
-# /// script
-# dependencies = [
-#     "python-docx",
-#     "python-docx-replace",
-#     "mcp",
-#     "docx2pdf",
-#     "docx>=0.2.4",
-# ]
-# requires-python = ">=3.10"
-# ///
-"""
-
 import os
 import base64
 import json
@@ -205,7 +192,7 @@ async def serve() -> None:
         await server.run(read_stream, write_stream, options, raise_exceptions=True)
 
 
-if __name__ == "__main__":
+def main():
     import asyncio
 
     asyncio.run(serve())

@@ -1,11 +1,3 @@
-# /// script
-# dependencies = [
-#     "yt-dlp",
-#     "mcp",
-# ]
-# requires-python = ">=3.10"
-# ///
-
 import os
 import tempfile
 import json
@@ -597,7 +589,7 @@ async def serve() -> None:
         await server.run(read_stream, write_stream, options)
 
 
-if __name__ == "__main__":
+def main():
     import asyncio
 
     asyncio.run(serve())

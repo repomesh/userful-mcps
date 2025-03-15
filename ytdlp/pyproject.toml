@@ -1,0 +1,18 @@
+[project]
+name = "ytdlp-mcp-server"
+version = "0.1.0"
+description = "Youtube MCP server for download subtitles and chapters information"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = ["mcp", "yt-dlp>=2025.2.19"]
+
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+dev-dependencies = ["pyright>=1.1.389"]
+
+[project.scripts]
+ytdlp = "ytdlp_mcp:main"
