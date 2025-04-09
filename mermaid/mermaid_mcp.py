@@ -1,3 +1,4 @@
+import codecs
 import os
 import sys
 import json
@@ -30,6 +31,10 @@ logger = logging.getLogger(__name__)
 # --- Pydantic Input Model ---
 class RenderMermaidChartInput(BaseModel):
     mermaid_code: str = Field(..., description="The Mermaid diagram code.")
+    document_id: Optional[str] = Field(
+        default=None,  # Make default None explicitly
+        description="Optional: The Document ID of an existing diagram to update. If omitted, a new diagram will be created.",
+    )
     output_path: str = Field(
         ...,
         description="The file path where the PNG image should be saved (e.g., 'output/diagram.png').",
@@ -107,53 +112,101 @@ class MermaidChartService:
         logger.info(f"PNG data received ({len(response.content)} bytes).")
         return response.content
 
+    def patch_document(self, document_id: str, code: str) -> Dict[str, Any]:
+        """Updates an existing document with the given Mermaid code."""
+        logger.info(f"Patching document {document_id}...")
+        endpoint = f"/rest-api/documents/{document_id}"
+        payload = {"code": code}
+        response = self._request("PATCH", endpoint, json=payload)
+        document = response.json()
+        logger.info(
+            f"Document {document_id} patched successfully: New version v{document.get('major')}.{document.get('minor')}"
+        )
+        logger.info(f"{document}")
+        return document
+
 
 # --- MCP Server Implementation ---
 async def serve() -> None:
     logger.info("Initializing Mermaid MCP server...")
     server = Server("mcp-mermaid")  # Use a unique name for the server
 
-    # Tool implementation function (moved outside the class structure for simplicity, similar to docx_replace)
+    # Tool implementation function
     async def _render_mermaid_chart_impl(
-        mermaid_code: str, output_path: str, theme: str
+        mermaid_code: str,
+        output_path: str,
+        theme: str,
+        document_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Internal logic for rendering the chart."""
+        """Internal logic for rendering or updating the chart."""
         access_token = os.environ.get(MERMAID_ACCESS_TOKEN)
         if not access_token:
             raise ValueError(
                 f"{MERMAID_ACCESS_TOKEN} environment variable is required."
             )
 
+        # --- Process escaped characters in mermaid_code ---
+        try:
+            # Use codecs.decode to handle escapes like \\n -> \n
+            # This will leave existing \n untouched.
+            processed_mermaid_code = codecs.decode(mermaid_code, "unicode_escape")
+            logger.debug(
+                "Processed mermaid code (first 100 chars): %s",
+                processed_mermaid_code[:100],
+            )
+        except Exception as e:
+            logger.error("Failed to process mermaid code escapes: %s", e)
+            # Fallback or re-raise depending on desired behavior.
+            # Here, we'll proceed with the original code but log a warning.
+            logger.warning(
+                "Proceeding with original mermaid code due to processing error."
+            )
+            processed_mermaid_code = mermaid_code  # Or raise ValueError("Invalid escape sequences in mermaid_code")
+        # --- End of processing ---
+
         service = MermaidChartService(access_token)
 
-        if not mermaid_code:
-            raise ValueError("Mermaid code cannot be empty.")
+        # Use processed_mermaid_code from now on
+        if not processed_mermaid_code:
+            raise ValueError("Mermaid code cannot be empty (after processing escapes).")
         if not output_path:
             raise ValueError("Output path cannot be empty.")
         if not output_path.lower().endswith(".png"):
             logger.warning("Output path does not end with .png, appending it.")
             output_path += ".png"
 
-        # 1. Get projects and select the first one
-        projects = service.get_projects()  # This is synchronous, might block asyncio loop if slow. Consider running in executor if needed.
-        if not projects:
-            raise RuntimeError(
-                "No projects found. Please create a project in Mermaid Chart."
-            )
-        project_id = projects[0].get("id")
-        if not project_id:
-            raise RuntimeError("Could not determine Project ID from Mermaid Chart.")
-        logger.info(f"Using project ID: {project_id}")
+        major = None
+        minor = None
 
-        # 2. Create the document
-        document = service.create_document(mermaid_code, project_id)  # Synchronous
-        document_id = document.get("documentID")
-        major = document.get("major")
-        minor = document.get("minor")
+        if document_id:
+            # 1. Patch existing document
+            logger.info(f"Attempting to update existing document: {document_id}")
+            # Use processed_mermaid_code
+            document = service.patch_document(document_id, processed_mermaid_code)
+            major = document.get("major", 0)
+            minor = document.get("minor", 1)
+        else:
+            # 1. Get projects and select the first one
+            projects = service.get_projects()
+            if not projects:
+                raise RuntimeError(
+                    "No projects found. Please create a project in Mermaid Chart."
+                )
+            project_id = projects[0].get("id")
+            if not project_id:
+                raise RuntimeError("Could not determine Project ID from Mermaid Chart.")
+            logger.info(f"Using project ID: {project_id}")
+
+            # 2. Create the document
+            # Use processed_mermaid_code
+            document = service.create_document(processed_mermaid_code, project_id)
+            document_id = document.get("documentID")  # Assign the newly created ID
+            major = document.get("major")
+            minor = document.get("minor")
 
         if not all([document_id, major is not None, minor is not None]):
             raise RuntimeError(
-                "Failed to create document or get necessary details (ID, version)."
+                f"Failed to create/update document or get necessary details (ID, version).({document_id}, {major}, {minor})"
             )
 
         # 3. Get the PNG data
@@ -171,7 +224,7 @@ async def serve() -> None:
         # with open(abs_output_path, "wb") as f:
         #     f.write(png_data) # Blocking I/O
 
-        logger.info("Mermaid chart rendered successfully.")
+        logger.info("Mermaid chart rendered/updated successfully.")
         return {"output_path": abs_output_path, "document_id": document_id}
 
     def _save_file(path: str, data: bytes):
@@ -185,7 +238,8 @@ async def serve() -> None:
         return [
             Tool(
                 name="render_mermaid_chart",
-                description="Renders Mermaid code using the Mermaid Chart API and saves it as a PNG image.",
+                # Update description
+                description="Renders Mermaid code using the Mermaid Chart API and saves it as a PNG image. If a 'document_id' is provided, it updates the existing diagram; otherwise, it creates a new one. Returns the output path and the document ID. If the result has status code 400 Bad Request, the diagram likely has syntax errors; review and try again.",
                 inputSchema=RenderMermaidChartInput.model_json_schema(),
             )
         ]
@@ -205,8 +259,8 @@ async def serve() -> None:
                 result_data = await _render_mermaid_chart_impl(
                     mermaid_code=validated_input.mermaid_code,
                     output_path=validated_input.output_path,
-                    theme=validated_input.theme
-                    or DEFAULT_THEME,  # Ensure theme has a value
+                    theme=validated_input.theme or DEFAULT_THEME,
+                    document_id=validated_input.document_id,
                 )
                 logger.info(f"Tool '{name}' executed successfully.")
                 # Wrap successful result in TextContent

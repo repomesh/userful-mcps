@@ -20,7 +20,7 @@ except ImportError as e:
 
 # --- Configuration ---
 MCP_SCRIPT_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "mermaid", "mermaid_mcp.py")
+    os.path.join(os.path.dirname(__file__), "..", "mermaid_mcp.py")
 )
 ACCESS_TOKEN_ENV_VAR = "MERMAID_ACCESS_TOKEN"
 
@@ -350,6 +350,111 @@ class TestMermaidMCP(unittest.IsolatedAsyncioTestCase):
             # --- End Test Logic ---
         # --- Teardown (implicit via async with) ---
         logger.info("MCP Session closed for test_04...")
+
+    async def test_05_patch_mermaid_chart_success(self):
+        """Test the render_mermaid_chart tool successfully using ClientSession."""
+        logger.info("Running test_05_patch_mermaid_chart_success...")
+        # --- Setup within test ---
+        async with AsyncExitStack() as stack:
+            try:
+                read, write = await stack.enter_async_context(
+                    stdio_client(self.server_params)
+                )
+                session = await stack.enter_async_context(ClientSession(read, write))
+                await session.initialize()
+                logger.info("MCP Session initialized for test_02...")
+            except Exception as e:
+                self.fail(f"MCP setup failed for test_02: {e}")
+            # --- End Setup ---
+
+            # --- Test Logic ---
+            tool_name = "render_mermaid_chart"
+            output_path = None  # Define output_path before try block
+            try:
+                with tempfile.NamedTemporaryFile(
+                    suffix=".png", delete=False
+                ) as tmp_file:
+                    output_path = tmp_file.name
+                if os.path.exists(output_path):
+                    os.remove(output_path)
+
+                mermaid_code = "graph LR;\nX-->Y;"
+                tool_args = {
+                    "mermaid_code": mermaid_code,
+                    "output_path": output_path,
+                    "document_id": "735d90a6-d391-4294-ba8d-94a88f1ee736",
+                }
+
+                result: types.CallToolResult = await session.call_tool(
+                    tool_name, tool_args
+                )
+                logger.info(f"Received call_tool result: {result}")
+
+                self.assertIsInstance(result, types.CallToolResult)
+                self.assertFalse(
+                    result.isError,
+                    f"Result should not indicate an error. Content: {result.content}",
+                )
+                self.assertIsInstance(
+                    result.content, list, "Result content should be a list"
+                )
+                self.assertEqual(len(result.content), 1, "Expected one content item")
+
+                content_item = result.content[0]
+                self.assertIsInstance(
+                    content_item,
+                    types.TextContent,
+                    "Content item should be TextContent",
+                )
+                self.assertEqual(content_item.type, "text")
+
+                tool_output = json.loads(content_item.text)
+                logger.info(f"Parsed tool output: {tool_output}")
+
+                self.assertIn(
+                    "output_path", tool_output, "Tool output should contain output_path"
+                )
+                self.assertEqual(
+                    os.path.abspath(tool_output["output_path"]),
+                    os.path.abspath(output_path),
+                    "Returned output path mismatch",
+                )
+                self.assertIn(
+                    "document_id", tool_output, "Tool output should contain document_id"
+                )
+
+                self.assertTrue(
+                    os.path.exists(output_path),
+                    f"Output file '{output_path}' was not created.",
+                )
+                self.assertGreater(
+                    os.path.getsize(output_path),
+                    0,
+                    f"Output file '{output_path}' is empty.",
+                )
+
+                logger.info("test_05_patch_mermaid_chart_success PASSED")
+
+            except Exception as e:
+                logger.error(
+                    f"test_05_patch_mermaid_chart_success failed: {e}", exc_info=True
+                )
+                self.fail(
+                    f"test_05_patch_mermaid_chart_success encountered an error: {e}"
+                )
+            finally:
+                # Ensure cleanup of temp file
+                if output_path and os.path.exists(output_path):
+                    try:
+                        os.remove(output_path)
+                        logger.debug(f"Cleaned up temp file: {output_path}")
+                    except OSError as err:
+                        logger.warning(
+                            f"Could not remove temp file {output_path}: {err}"
+                        )
+            # --- End Test Logic ---
+        # --- Teardown (implicit via async with) ---
+        logger.info("MCP Session closed for test_02...")
 
 
 if __name__ == "__main__":
