@@ -1,0 +1,23 @@
+[project]
+name = "rss2md"
+version = "0.1.0"
+description = "An MCP server providing a tool to fetch RSS/Atom feeds, filter entries by date, and convert them to a structured Markdown format"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "feedparser>=6.0.11",
+  "markdownify>=1.1.0",
+  "mcp>=1.6.0",
+  "python-dateutil>=2.9.0.post0",
+]
+
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+dev-dependencies = ["pyright>=1.1.389"]
+
+
+[project.scripts]
+rss2md_mcp = "rss2md:main"
