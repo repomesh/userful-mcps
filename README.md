@@ -17,7 +17,7 @@ Communication happens via standard input/output (stdio) using JSON messages.
 Each MCP server is designed to be run using a Python environment manager like
 `uv`.
 
-### YouTube Data Extractor (`ytdlp/ytdlp_mcp.py`)
+### YouTube Data Extractor (`ytdlp`)
 
 A server that extracts information from YouTube videos using yt-dlp.
 
@@ -45,7 +45,7 @@ A server that extracts information from YouTube videos using yt-dlp.
 }
 ```
 
-### Word Document Processor (`docx_replace/docx_replace_mcp.py`)
+### Word Document Processor (`docx_replace`)
 
 A server for manipulating Word documents, including template processing and PDF
 conversion.
@@ -75,7 +75,7 @@ conversion.
 }
 ```
 
-### PlantUML Renderer (`plantuml/src/plantuml_server/main.py`)
+### PlantUML Renderer (`plantuml`)
 
 A server for rendering PlantUML diagrams using a PlantUML server (often run via
 Docker).
@@ -104,7 +104,7 @@ Docker).
 _(Note: Requires a running PlantUML server accessible, potentially managed via
 Docker as implemented in the service)._
 
-### Mermaid Renderer (`mermaid/mermaid_mcp.py`)
+### Mermaid Renderer (`mermaid`)
 
 A server for rendering Mermaid diagrams using the mermaidchart.com API.
 
@@ -135,6 +135,34 @@ A server for rendering Mermaid diagrams using the mermaidchart.com API.
 
 _(Note: Requires a Mermaid Chart API access token set as an environment
 variable)._
+
+### Rss feed to markdown (`rss2md`)
+
+A server for Convert rss feed content to markdown format with date filtering.
+
+**Tools:**
+
+- **fetch_rss_to_markdown**: Fetches an RSS feed, filters articles by date, and
+  returns matching articles formatted as a Markdown list..
+
+**MCP Server Configuration:**
+
+```json
+"mcpServers": {
+  "mermaid": {
+    "name": "rss2md", // Optional friendly name
+    "command": "uv",
+    "args": [
+      "run",
+      "--directory", "<path/to/repo>/useful-mcps/rss2md", // Path to the MCP directory
+      "--",
+      "rss2md_mcp" // Match the script name defined in pyproject.toml
+    ],
+    "env": { // Environment variables needed by the MCP
+    }
+  }
+}
+```
 
 ## Installation
 
